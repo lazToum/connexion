@@ -1,3 +1,21 @@
+Fork Notes
+==========
+I (@dtkav) forked connexion to add some api-proxy features.
+You can use --proxy to test your swagger spec against a remote server.
+
+This is handy if you want to:
+
+- Test against a server that does not have CORS enabled.
+- Build an API-Gateway (using ProxyResolver).
+
+.. code-block:: bash
+
+    $ connexion run swagger.yml -v --proxy https://www.example.com/
+
+
+Happy Hacking!
+
+
 Connexion
 =========
 
