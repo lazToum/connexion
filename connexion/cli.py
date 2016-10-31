@@ -7,6 +7,7 @@ from clickclick import AliasedGroup, fatal_error
 
 import connexion
 from connexion.mock import MockResolver
+from connexion.proxy import ProxyResolver
 
 logger = logging.getLogger('connexion.cli')
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -76,6 +77,8 @@ def main():
               is_flag=True, default=False)
 @click.option('--mock', metavar='MOCKMODE', type=click.Choice(['all', 'notimplemented']),
               help='Returns example data for all endpoints or for which handlers are not found.')
+@click.option('--proxy', type=str,
+              help='Returns data from the given server (Bypass CORS).')
 @click.option('--hide-spec',
               help='Hides the API spec in JSON format which is by default available at `/swagger.json`.',
               is_flag=True, default=False)
@@ -111,6 +114,7 @@ def run(spec_file,
         server,
         stub,
         mock,
+        proxy,
         hide_spec,
         hide_console_ui,
         console_ui_url,
@@ -176,6 +180,9 @@ def run(spec_file,
     api_extra_args = {}
     if mock:
         resolver = MockResolver(mock_all=mock == 'all')
+        api_extra_args['resolver'] = resolver
+    if proxy:
+        resolver = ProxyResolver(proxy)
         api_extra_args['resolver'] = resolver
 
     app_cls = connexion.utils.get_function_from_name(
