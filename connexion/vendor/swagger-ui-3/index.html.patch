@@ -1,0 +1,11 @@
+--- index.html.1	2018-04-25 19:38:46.406604867 -0700
++++ index.html	2018-04-25 19:40:18.684565321 -0700
+@@ -41,7 +41,7 @@
+ 
+       // Build a system
+       const ui = SwaggerUIBundle({
+-        url: "http://petstore.swagger.io/v2/swagger.json",
++        url: "{{ api_url }}/openapi.json",
+         dom_id: '#swagger-ui',
+         deepLinking: true,
+         presets: [
