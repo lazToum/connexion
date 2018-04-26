@@ -8,7 +8,7 @@ from typing import AnyStr, List  # NOQA
 import jinja2
 import six
 import yaml
-from swagger_spec_validator.validator20 import validate_spec
+from openapi_spec_validator import validate_spec
 
 from ..exceptions import ResolverError
 from ..operation import Operation
@@ -97,6 +97,19 @@ class AbstractAPI(object):
 
         # Avoid validator having ability to modify specification
         spec = copy.deepcopy(self.specification)
+
+        if "openapi" in spec:
+            logger.info('Using OpenApi 3.x.x specification')
+            from openapi_spec_validator import validate_v3_spec as validate_spec
+            self.options = self.options.extend({"openapi_spec_version": spec["openapi"]})
+        elif "swagger" in spec:
+            logger.warning('Using Swagger 2.0 specification')
+            self.options = self.options.extend({"openapi_spec_version": spec["swagger"]})
+            from openapi_spec_validator import validate_v2_spec as validate_spec
+        else:
+            logger.error('Unknown Spec Version')
+            exit(1)
+
         validate_spec(spec)
 
         # https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md#fixed-fields
