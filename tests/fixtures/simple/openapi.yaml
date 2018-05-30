@@ -175,6 +175,7 @@ paths:
         content:
           application/json:
             schema:
+              x-body-name: stack
               $ref: '#/components/schemas/new_stack'
               default:
                 image_version: default_image
@@ -189,6 +190,7 @@ paths:
         content:
           application/json:
             schema:
+              x-body-name: stack_version
               type: integer
               format: int32
               example: 1
@@ -384,6 +386,7 @@ paths:
         content:
           multipart/form-data:
             schema:
+              x-body-name: formData
               type: object
               properties:
                 formData:
@@ -682,6 +685,7 @@ paths:
         content:
           text/plain:
             schema:
+              x-body-name: post_param
               type: string
         description: Just a testing parameter.
         required: true

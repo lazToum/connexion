@@ -116,7 +116,7 @@ class RequestBodyValidator(object):
         @functools.wraps(function)
         def wrapper(request):
             if all_json(self.consumes):
-                data = request.json or dict(request.form.items())
+                data = request.json or dict(request.form.items()) or (request.body if len(request.body) > 0 else {})
                 logger.debug(data)
                 if data is None and len(request.body) > 0 and not self.is_null_value_valid:
                     # the body has contents that were not parsed as JSON
@@ -189,6 +189,7 @@ class ParameterValidator(object):
 
     @staticmethod
     def validate_parameter(parameter_type, value, param):
+        logger.debug(param)
         if value is not None:
             if is_nullable(param) and is_null(value):
                 return
@@ -222,7 +223,7 @@ class ParameterValidator(object):
                 logger.info(debug_msg.format(**fmt_params))
                 return str(exception)
 
-        elif param.get('schema', param).get('required'):
+        elif param.get('required'):
             return "Missing {parameter_type} parameter '{param[name]}'".format(**locals())
 
     def validate_query_parameter_list(self, request):
@@ -254,7 +255,7 @@ class ParameterValidator(object):
         return self.validate_parameter('header', val, param)
 
     def validate_formdata_parameter(self, param, request):
-        if param.get('type') == 'file':
+        if param.get('type') == 'file' or param.get('format') == 'binary':
             val = request.files.get(param['name'])
         else:
             val = request.form.get(param['name'])
