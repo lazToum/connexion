@@ -46,18 +46,30 @@ class TypeValidationError(Exception):
 
 
 def validate_type(param, value, parameter_type, parameter_name=None):
-    param_type = param.get('type')
+    param_defn = param.get('schema', param) # oas3
+    param_type = param_defn.get('type')
     parameter_name = parameter_name if parameter_name else param['name']
     if param_type == "array":  # then logic is more complex
-        if param.get("collectionFormat") and param.get("collectionFormat") == "pipes":
-            parts = value.split("|")
-        else:  # default: csv
-            parts = value.split(",")
-
+        try:
+            # oas3
+            style = param["style"]
+            delimiters = {
+                "spaceDelimited": " ",
+                "pipeDelimited": "|",
+                "simple": ","
+            }
+            parts = value.split(delimiters[style])
+        except KeyError:
+            # swagger2
+            if param.get("collectionFormat") and param.get("collectionFormat") == "pipes":
+                parts = value.split("|")
+            else:  # default: csv
+                parts = value.split(",")
+    
         converted_parts = []
         for part in parts:
             try:
-                converted = make_type(part, param["items"]["type"])
+                converted = make_type(part, param_defn["items"]["type"])
             except (ValueError, TypeError):
                 converted = part
             converted_parts.append(converted)
@@ -104,7 +116,8 @@ class RequestBodyValidator(object):
         @functools.wraps(function)
         def wrapper(request):
             if all_json(self.consumes):
-                data = request.json
+                data = request.json or dict(request.form.items())
+                logger.debug(data)
                 if data is None and len(request.body) > 0 and not self.is_null_value_valid:
                     # the body has contents that were not parsed as JSON
                     return problem(415,
@@ -209,7 +222,7 @@ class ParameterValidator(object):
                 logger.info(debug_msg.format(**fmt_params))
                 return str(exception)
 
-        elif param.get('required'):
+        elif param.get('schema', param).get('required'):
             return "Missing {parameter_type} parameter '{param[name]}'".format(**locals())
 
     def validate_query_parameter_list(self, request):
