@@ -7,18 +7,19 @@ paths:
     post:
       summary: Generate greeting
       description: Generates a greeting message.
-      operationId: fakeapi.hello.post_greeting3
+      operationId: fakeapi.hello.post_greeting
       responses:
         '200':
           description: greeting response
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
       requestBody:
         content:
           application/x-www-form-urlencoded:
             schema:
+              x-body-name: name
               type: object
               properties:
                 name:
