@@ -12,7 +12,7 @@ paths:
         '200':
           description: greeting response
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
       parameters:
@@ -31,7 +31,7 @@ paths:
         '200':
           description: greeting response with url
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
       parameters:
@@ -480,7 +480,7 @@ paths:
               schema:
                 type: string
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
       parameters:
@@ -504,7 +504,7 @@ paths:
               schema:
                 type: string
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
   '/goodevening/{name}':
@@ -579,7 +579,7 @@ paths:
                   type: string
   /nullable-parameters:
     post:
-      operationId: fakeapi.hello.test_nullable_param_post
+      operationId: fakeapi.hello.test_nullable_param_post3
       responses:
         '200':
           description: OK
@@ -593,6 +593,7 @@ paths:
                   description: Just a testing parameter.
                   type: number
                   format: int32
+                  nullable: true
               required:
                 - post_param
     put:
@@ -604,6 +605,8 @@ paths:
         content:
           application/json:
             schema:
+              nullable: true
+              x-body-name: contents
               type: object
               properties:
                 name:
@@ -616,9 +619,9 @@ paths:
         - name: time_start
           description: Just a testing parameter.
           in: query
-          x-nullable: true
           required: true
           schema:
+            nullable: true
             type: integer
             format: int32
       responses:
@@ -691,7 +694,7 @@ paths:
         required: true
   /param-sanitization:
     post:
-      operationId: fakeapi.hello.test_param_sanitization
+      operationId: fakeapi.hello.test_param_sanitization3
       parameters:
         - name: $query
           description: Just a testing parameter with an invalid Python name
@@ -711,7 +714,7 @@ paths:
             schema:
               type: object
               properties:
-                $form:
+                'form$':
                   description: Just a testing parameter in the form data
                   type: string
   /body-sanitization:
@@ -729,7 +732,7 @@ paths:
         '200':
           description: OK
           content:
-            '*/*':
+            'application/json':
               schema:
                 type: object
                 required:
