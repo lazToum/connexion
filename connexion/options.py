@@ -3,6 +3,7 @@ from typing import Optional  # NOQA
 
 MODULE_PATH = pathlib.Path(__file__).absolute().parent
 
+
 class ConnexionOptions(object):
     def __init__(self, options=None):
         self._options = {}
