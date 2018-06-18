@@ -12,7 +12,7 @@ from ..exceptions import ExtraParameterProblem
 from ..http_facts import FORM_CONTENT_TYPES
 from ..problem import problem
 from ..query_parsing import query_split
-from ..utils import all_json, boolean, is_null, is_nullable
+from ..utils import all_json, boolean, get_schema, is_null, is_nullable
 
 
 logger = logging.getLogger('connexion.decorators.validation')
@@ -49,7 +49,7 @@ class TypeValidationError(Exception):
 
 
 def validate_type(param_defn, value, parameter_type, parameter_name=None):
-    param_schema = param_defn.get('schema', param_defn)  # oas3
+    param_schema = get_schema(param_defn)
     param_type = param_schema.get('type')
     parameter_name = parameter_name if parameter_name else param_defn['name']
     if param_type == 'array':
