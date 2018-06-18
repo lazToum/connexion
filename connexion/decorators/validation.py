@@ -115,9 +115,9 @@ class RequestBodyValidator(object):
                 if data is None and len(request.body) > 0 and not self.is_null_value_valid:
                     # the body has contents that were not parsed as JSON
                     return problem(415,
-                                   'Unsupported Media Type',
-                                   'Invalid Content-type ({content_type}), expected JSON data'.format(
-                                       content_type=request.headers.get('Content-Type', '')
+                                   "Unsupported Media Type",
+                                   "Invalid Content-type ({content_type}), expected JSON data".format(
+                                       content_type=request.headers.get("Content-Type", "")
                                    ))
 
                 logger.debug('%s validating schema...', request.url)
@@ -129,7 +129,7 @@ class RequestBodyValidator(object):
                 if data is None and len(request.body) > 0 and not self.is_null_value_valid:
                     # complain about no data?
                     pass
-                data.update({k: '' for k in dict(request.files)})  # validator expects string..
+                data.update(dict.fromkeys(request.files, ''))  # validator expects string..
                 logger.debug('%s validating schema...', request.url)
                 if self.strict_validation:
                     formdata_errors = self.validate_requestbody_property_list(data)
