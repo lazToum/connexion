@@ -87,23 +87,7 @@ class AbstractAPI(object):
         self.specification = compatibility_layer(self.specification)
         logger.debug('Read specification', extra={'spec': self.specification})
 
-        def get_semver_tuple(spec):
-            # assume oas3
-            try:
-                version_string = spec.get('openapi') or spec.get('swagger')
-            except Exception:
-                raise InvalidSpecification('Unable to get spec version')
-            if version_string is None:
-                raise InvalidSpecification('Unable to get spec version')
-            try:
-                version_tuple = tuple(map(int, version_string.split(".")))
-            except TypeError:
-                # unable to convert to semver tuple
-                raise InvalidSpecification('Invalid Spec Version')
-            return version_tuple
-
-        self.spec_version = get_semver_tuple(self.specification)
-        logger.debug(self.spec_version)
+        self.spec_version = self._get_spec_version(self.specification)
 
         self.options = ConnexionOptions(old_style_options, oas_version=self.spec_version)
         # options is added last to preserve the highest priority
@@ -122,12 +106,12 @@ class AbstractAPI(object):
         # Avoid validator having ability to modify specification
         spec = copy.deepcopy(self.specification)
 
-        if self.spec_version >= (3, 0, 0):
-            logger.info('Using OpenApi 3.x.x specification')
-            from openapi_spec_validator import validate_v3_spec as validate_spec
-        else:
+        if self.spec_version < (3, 0, 0):
             logger.info('Using Swagger 2.0 specification')
             from openapi_spec_validator import validate_v2_spec as validate_spec
+        else:
+            logger.info('Using OpenApi %d.%d.%d specification' % self.spec_version)
+            from openapi_spec_validator import validate_v3_spec as validate_spec
 
         validate_spec(spec)
 
@@ -325,6 +309,21 @@ class AbstractAPI(object):
 
             swagger_string = jinja2.Template(swagger_template).render(**arguments)
             return yaml.safe_load(swagger_string)  # type: dict
+
+    def _get_spec_version(self, spec):
+        # assume oas3
+        try:
+            version_string = spec.get('openapi') or spec.get('swagger')
+        except Exception:
+            raise InvalidSpecification('Unable to get spec version')
+        if version_string is None:
+            raise InvalidSpecification('Unable to get spec version')
+        try:
+            version_tuple = tuple(map(int, version_string.split(".")))
+        except TypeError:
+            # unable to convert to semver tuple
+            raise InvalidSpecification('Invalid Spec Version')
+        return version_tuple
 
     @classmethod
     @abc.abstractmethod
