@@ -50,7 +50,7 @@ class TypeValidationError(Exception):
 def validate_type(param_defn, value, parameter_type, parameter_name=None):
     param_schema = get_schema(param_defn)
     param_type = param_schema.get('type')
-    parameter_name = parameter_name if parameter_name else param_defn['name']
+    parameter_name = parameter_name or param_defn['name']
     if param_type == 'array':
         parts = query_split(value, param_defn)
         converted_parts = []
