@@ -14,7 +14,6 @@ from ..problem import problem
 from ..query_parsing import query_split
 from ..utils import all_json, boolean, get_schema, is_null, is_nullable
 
-
 logger = logging.getLogger('connexion.decorators.validation')
 
 TYPE_MAP = {
