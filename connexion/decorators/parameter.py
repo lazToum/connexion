@@ -9,6 +9,7 @@ import six
 
 from ..http_facts import FORM_CONTENT_TYPES
 from ..lifecycle import ConnexionRequest  # NOQA
+from ..query_parsing import resolve_query_duplicates, query_split
 from ..utils import all_json, boolean, is_null, is_nullable
 
 try:
@@ -58,34 +59,17 @@ def make_type(value, type):
     return type_func(value)
 
 
-def get_val_from_param(value, query_param):
-    if is_nullable(query_param) and is_null(value):
+def get_val_from_param(value, query_defn):
+    if is_nullable(query_defn) and is_null(value):
         return None
 
-    query_defn = query_param.get("schema", query_param)  # oas3
+    query_schema = query_defn.get("schema", query_defn)
 
-    if query_defn["type"] == "array":  # then logic is more complex
-        # TODO DGK refactor common code with validation
-        try:
-            # oas3
-            style = query_param["style"]
-            # default values for "in"
-            # query - form; path - simple; header - simple; cookie - form.
-            delimiters = {
-                "spaceDelimited": " ",
-                "pipeDelimited": "|",
-                "simple": ","
-            }
-            parts = value.split(delimiters.get(style, ","))
-        except KeyError:
-            # swagger2
-            if query_param.get("collectionFormat") == "pipes":
-                parts = value.split("|")
-            else:  # default: csv
-                parts = value.split(",")
-        return [make_type(part, query_defn["items"]["type"]) for part in parts]
+    if query_schema["type"] == "array":
+        parts = query_split(value, query_defn)
+        return [make_type(part, query_schema["items"]["type"]) for part in parts]
     else:
-        return make_type(value, query_defn["type"])
+        return make_type(value, query_schema["type"])
 
 
 def snake_and_shadow(name):
@@ -127,33 +111,14 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
     def make_request_query(request):
         request_query = {}
         try:
-            for k, v in request.query.to_dict(flat=False).items():
+            for k, values in request.query.to_dict(flat=False).items():
                 k = sanitize_param(k)
-                query_param = query_types.get(k, None)
-                # OAS3 schema keyword
-                query_schema = query_param.get('schema', query_param)
+                query_defn = query_defns.get(k, None)
+                query_schema = query_defn.get('schema', query_defn)
                 if (query_schema is not None and query_schema['type'] == 'array'):
-                    try:
-                        # OAS3
-                        style = query_param['style']
-                        explode = query_param.get('explode', style == 'form')
-                        delimiters = {
-                            'spaceDelimited': ' ',
-                            'pipeDelimited': '|',
-                            'simple': ',',
-                            'form': ','
-                        }
-                        if explode:
-                            request_query[k] = delimiters.get(style, ',').join(v)
-                        else:
-                            request_query[k] = v[-1]
-                    except KeyError:
-                        if query_param.get('collectionFormat') == 'multi':
-                            request_query[k] = ','.join(v)
-                        else:
-                            request_query[k] = v[-1]
+                    request_query[k] = resolve_query_duplicates(values, query_defn)
                 else:
-                    request_query[k] = v[-1]
+                    request_query[k] = values[-1]
         except AttributeError:
             request_query = {sanitize_param(k): v for k, v in request.query.items()}
         return request_query
@@ -163,7 +128,7 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
     body_name = sanitize_param(body_parameters[0].get('name'))
     default_body = body_parameters[0].get('schema', {}).get('default')
 
-    form_types = {sanitize_param(parameter['name']): parameter
+    form_defns = {sanitize_param(parameter['name']): parameter
                   for parameter in parameters
                   if parameter['in'] == 'formData'}
 
@@ -177,9 +142,9 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
     else:
         body_properties = {}
 
-    query_types = {sanitize_param(parameter['name']): parameter
+    query_defns = {sanitize_param(parameter['name']): parameter
                    for parameter in parameters if parameter['in'] == 'query'}  # type: dict[str, str]
-    path_types = {parameter['name']: parameter
+    path_defns = {parameter['name']: parameter
                   for parameter in parameters
                   if parameter['in'] == 'path'}
     arguments, has_kwargs = inspect_function_arguments(function)
@@ -210,8 +175,8 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
         path_params = request.path_params
         for key, value in path_params.items():
             key = sanitize_param(key)
-            if key in path_types:
-                kwargs[key] = get_val_from_param(value, path_types[key])
+            if key in path_defns:
+                kwargs[key] = get_val_from_param(value, path_defns[key])
             else:  # Assume path params mechanism used for injection
                 kwargs[key] = value
 
@@ -241,11 +206,11 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
                 else:
                     logger.debug("FormData parameter '%s' in function arguments", key)
                     try:
-                        form_param = form_types[key]
+                        form_defn = form_defns[key]
                     except KeyError:  # pragma: no cover
                         logger.error("Function argument '{}' not defined in specification".format(key))
                     else:
-                        kwargs[key] = get_val_from_param(value, form_param)
+                        kwargs[key] = get_val_from_param(value, form_defn)
 
         # Add query parameters
         query_arguments = copy.deepcopy(default_query_params)
@@ -257,12 +222,12 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
             else:
                 logger.debug("Query Parameter '%s' in function arguments", key)
                 try:
-                    query_param = query_types[key]
+                    query_defn = query_defns[key]
                 except KeyError:  # pragma: no cover
                     logger.error("Function argument '{}' not defined in specification".format(key))
                 else:
-                    logger.debug('%s is a %s', key, query_param)
-                    kwargs[key] = get_val_from_param(value, query_param)
+                    logger.debug('%s is a %s', key, query_defn)
+                    kwargs[key] = get_val_from_param(value, query_defn)
 
         # Add file parameters
         file_arguments = request.files

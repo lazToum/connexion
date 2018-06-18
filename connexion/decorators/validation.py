@@ -11,6 +11,7 @@ from werkzeug import FileStorage
 from ..exceptions import ExtraParameterProblem
 from ..http_facts import FORM_CONTENT_TYPES
 from ..problem import problem
+from ..query_parsing import query_split
 from ..utils import all_json, boolean, is_null, is_nullable
 
 
@@ -47,31 +48,16 @@ class TypeValidationError(Exception):
         return msg.format(**vars(self))
 
 
-def validate_type(param, value, parameter_type, parameter_name=None):
-    param_defn = param.get('schema', param)  # oas3
-    param_type = param_defn.get('type')
-    parameter_name = parameter_name if parameter_name else param['name']
-    if param_type == 'array':  # then logic is more complex
-        try:
-            # oas3
-            style = param['style']
-            delimiters = {
-                'spaceDelimited': ' ',
-                'pipeDelimited': '|',
-                'simple': ','
-            }
-            parts = value.split(delimiters[style])
-        except KeyError:
-            # swagger2
-            if param.get('collectionFormat') and param.get('collectionFormat') == 'pipes':
-                parts = value.split('|')
-            else:  # default: csv
-                parts = value.split(',')
-
+def validate_type(param_defn, value, parameter_type, parameter_name=None):
+    param_schema = param_defn.get('schema', param_defn)  # oas3
+    param_type = param_schema.get('type')
+    parameter_name = parameter_name if parameter_name else param_defn['name']
+    if param_type == 'array':
+        parts = query_split(value, param_defn)
         converted_parts = []
         for part in parts:
             try:
-                converted = make_type(part, param_defn['items']['type'])
+                converted = make_type(part, param_schema['items']['type'])
             except (ValueError, TypeError):
                 converted = part
             converted_parts.append(converted)
