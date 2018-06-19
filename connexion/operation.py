@@ -187,7 +187,6 @@ class Operation(SecureOperation):
         self.validator_map.update(validator_map or {})
 
         self.components = components or {}
-        self.definitions = None  # XXX
 
         def component_get(oas3_name):
             return self.components.get(oas3_name, {})
@@ -292,8 +291,6 @@ class Operation(SecureOperation):
         # if there is a schema object on this param or response, then we just
         # need to include the defs and it can be validated by jsonschema
         if "schema" in schema:
-            if self.definitions:
-                schema['schema']['definitions'] = self.definitions
             if self.components:
                 schema['schema']['components'] = self.components
             return schema
