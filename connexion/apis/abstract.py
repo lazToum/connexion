@@ -20,8 +20,6 @@ MODULE_PATH = pathlib.Path(__file__).absolute().parent.parent
 SWAGGER_UI_PATH = MODULE_PATH / 'vendor' / 'swagger-ui'
 SWAGGER_UI_URL = 'ui'
 
-RESOLVER_ERROR_ENDPOINT_RANDOM_DIGITS = 6
-
 logger = logging.getLogger('connexion.apis.abstract')
 
 
@@ -251,14 +249,8 @@ class AbstractAPI(object):
         Adds a handler for ResolverError for the given method and path.
         """
         operation = self.resolver_error_handler(err,
-                                                method=method,
-                                                path=path,
-                                                app_security=self.security,
-                                                security_schemes=self.security_definitions,
-                                                validate_responses=self.validate_responses,
-                                                strict_validation=self.strict_validation,
-                                                resolver=self.resolver,
-                                                randomize_endpoint=RESOLVER_ERROR_ENDPOINT_RANDOM_DIGITS)
+                                                security=self.security,
+                                                security_definitions=self.security_definitions)
         self._add_operation_internal(method, path, operation)
 
     def add_paths(self, paths=None):
