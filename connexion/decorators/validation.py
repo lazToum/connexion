@@ -11,8 +11,7 @@ from werkzeug import FileStorage
 from ..exceptions import ExtraParameterProblem
 from ..http_facts import FORM_CONTENT_TYPES
 from ..problem import problem
-from ..query_parsing import query_split
-from ..utils import all_json, boolean, get_schema, is_null, is_nullable
+from ..utils import all_json, boolean, is_null, is_nullable
 
 logger = logging.getLogger('connexion.decorators.validation')
 
@@ -20,6 +19,13 @@ TYPE_MAP = {
     'integer': int,
     'number': float,
     'boolean': boolean
+}
+
+QUERY_STRING_DELIMITERS = {
+    'spaceDelimited': ' ',
+    'pipeDelimited': '|',
+    'simple': ',',
+    'form': ','
 }
 
 
@@ -45,29 +51,6 @@ class TypeValidationError(Exception):
     def __str__(self):
         msg = "Wrong type, expected '{schema_type}' for {parameter_type} parameter '{parameter_name}'"
         return msg.format(**vars(self))
-
-
-def validate_type(param_defn, value, parameter_type, parameter_name=None):
-    param_schema = get_schema(param_defn)
-    param_type = param_schema.get('type')
-    parameter_name = parameter_name or param_defn['name']
-    if param_type == 'array':
-        parts = query_split(value, param_defn)
-        converted_parts = []
-        for part in parts:
-            try:
-                converted = make_type(part, param_schema['items']['type'])
-            except (ValueError, TypeError):
-                converted = part
-            converted_parts.append(converted)
-        return converted_parts
-    else:
-        try:
-            return make_type(value, param_type)
-        except ValueError:
-            raise TypeValidationError(param_type, parameter_type, parameter_name)
-        except TypeError:
-            return value
 
 
 def validate_parameter_list(request_params, spec_params):
@@ -187,6 +170,8 @@ class ParameterValidator(object):
     def __init__(self, parameters, api, strict_validation=False):
         """
         :param parameters: List of request parameter dictionaries
+        :param api: api that the validator is attached to
+        :param validate_type: function for validating a type
         :param strict_validation: Flag indicating if parameters not in spec are allowed
         """
         self.parameters = collections.defaultdict(list)
@@ -196,14 +181,18 @@ class ParameterValidator(object):
         self.api = api
         self.strict_validation = strict_validation
 
-    @staticmethod
-    def validate_parameter(parameter_type, value, param):
+    @classmethod
+    def validate_type(cls, param, value, parameter_type):
+        raise NotImplementedError("Use Validator for your spec version")
+
+    @classmethod
+    def validate_parameter(cls, parameter_type, value, param):
         if value is not None:
             if is_nullable(param) and is_null(value):
                 return
 
             try:
-                converted_value = validate_type(param, value, parameter_type)
+                converted_value = cls.validate_type(param, value, parameter_type)
             except TypeValidationError as e:
                 return str(e)
 
@@ -314,3 +303,70 @@ class ParameterValidator(object):
             return function(request)
 
         return wrapper
+
+
+class Swagger2ParameterValidator(ParameterValidator):
+
+    @staticmethod
+    def query_split(value, param_defn):
+        if param_defn.get("collectionFormat") == 'pipes':
+            return value.split('|')
+        return value.split(',')
+
+    @classmethod
+    def validate_type(cls, param_defn, value, parameter_type, parameter_name=None):
+        param_schema = param_defn
+        param_type = param_schema.get('type')
+        parameter_name = parameter_name or param_defn['name']
+        if param_type == 'array':
+            parts = cls.query_split(value, param_defn)
+            converted_parts = []
+            for part in parts:
+                try:
+                    converted = make_type(part, param_schema['items']['type'])
+                except (ValueError, TypeError):
+                    converted = part
+                converted_parts.append(converted)
+            return converted_parts
+        else:
+            try:
+                return make_type(value, param_type)
+            except ValueError:
+                raise TypeValidationError(param_type, parameter_type, parameter_name)
+            except TypeError:
+                return value
+
+
+class OpenAPIParameterValidator(ParameterValidator):
+
+    @staticmethod
+    def query_split(value, param_defn):
+        try:
+            style = param_defn['style']
+            delimiter = QUERY_STRING_DELIMITERS.get(style, ',')
+            return value.split(delimiter)
+        except KeyError:
+            return value.split(',')
+
+    @classmethod
+    def validate_type(cls, param_defn, value, parameter_type, parameter_name=None):
+        param_schema = param_defn["schema"]
+        param_type = param_schema.get('type')
+        parameter_name = parameter_name or param_defn['name']
+        if param_type == 'array':
+            parts = cls.query_split(value, param_defn)
+            converted_parts = []
+            for part in parts:
+                try:
+                    converted = make_type(part, param_schema['items']['type'])
+                except (ValueError, TypeError):
+                    converted = part
+                converted_parts.append(converted)
+            return converted_parts
+        else:
+            try:
+                return make_type(value, param_type)
+            except ValueError:
+                raise TypeValidationError(param_type, parameter_type, parameter_name)
+            except TypeError:
+                return value

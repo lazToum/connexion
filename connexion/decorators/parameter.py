@@ -1,4 +1,3 @@
-import copy
 import functools
 import inspect
 import logging
@@ -9,8 +8,7 @@ import six
 
 from ..http_facts import FORM_CONTENT_TYPES
 from ..lifecycle import ConnexionRequest  # NOQA
-from ..query_parsing import query_split, resolve_query_duplicates
-from ..utils import all_json, boolean, get_schema, is_null, is_nullable
+from ..utils import all_json
 
 try:
     import builtins
@@ -25,14 +23,6 @@ try:
     py_string = unicode
 except NameError:  # pragma: no cover
     py_string = str  # pragma: no cover
-
-# https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md#data-types
-TYPE_MAP = {'integer': int,
-            'number': float,
-            'string': py_string,
-            'boolean': boolean,
-            'array': list,
-            'object': dict}  # map of swagger types to python types
 
 
 def inspect_function_arguments(function):  # pragma: no cover
@@ -54,24 +44,6 @@ def inspect_function_arguments(function):  # pragma: no cover
         return argspec.args, bool(argspec.keywords)
 
 
-def make_type(value, type):
-    type_func = TYPE_MAP[type]  # convert value to right type
-    return type_func(value)
-
-
-def get_val_from_param(value, query_defn):
-    if is_nullable(query_defn) and is_null(value):
-        return None
-
-    query_schema = get_schema(query_defn)
-
-    if query_schema["type"] == "array":
-        parts = query_split(value, query_defn)
-        return [make_type(part, query_schema["items"]["type"]) for part in parts]
-    else:
-        return make_type(value, query_schema["type"])
-
-
 def snake_and_shadow(name):
     """
     Converts the given name into Pythonic form. Firstly it converts CamelCase names to snake_case. Secondly it looks to
@@ -86,75 +58,29 @@ def snake_and_shadow(name):
     return snake
 
 
-def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_params=False):
+def parameter_to_arg(operation, function, pythonic_params=False):
     """
     Pass query and body parameters as keyword arguments to handler function.
 
     See (https://github.com/zalando/connexion/issues/59)
-    :param parameters: All the expected parameters of the handler functions
-    :type parameters: dict|None
-    :param body_schema: The schema for a request body
-    :type body_schema: dict|None
-    :param consumes: The list of content types the operation consumes
-    :type consumes: list
-    :param function: The handler function for the REST endpoint.
+    :param operation: The operation being called
+    :type operation: connexion.operations.AbstractOperation
     :param pythonic_params: When True CamelCase parameters are converted to snake_case and an underscore is appended to
     any shadowed built-ins
     :type pythonic_params: bool
     :type function: function|None
     """
-    def sanitize_param(name):
-        if name and pythonic_params:
-            name = snake_and_shadow(name)
+    consumes = operation.consumes
+
+    def pythonic(name):
+        name = name and snake_and_shadow(name)
         return name and re.sub('^[^a-zA-Z_]+', '', re.sub('[^0-9a-zA-Z_]', '', name))
 
-    def make_request_query(request):
-        request_query = {}
-        try:
-            for k, values in request.query.to_dict(flat=False).items():
-                k = sanitize_param(k)
-                query_defn = query_defns.get(k, None)
-                query_schema = get_schema(query_defn)
-                if (query_schema is not None and query_schema['type'] == 'array'):
-                    request_query[k] = resolve_query_duplicates(values, query_defn)
-                else:
-                    request_query[k] = values[-1]
-        except AttributeError:
-            request_query = {sanitize_param(k): v for k, v in request.query.items()}
-        return request_query
+    def sanitized(name):
+        return name and re.sub('^[^a-zA-Z_]+', '', re.sub('[^0-9a-zA-Z_]', '', name))
 
-    # swagger2 body
-    body_parameters = [p for p in parameters if p['in'] == 'body'] or [{}]
-    body_name = sanitize_param(body_parameters[0].get('name'))
-    default_body = body_parameters[0].get('schema', {}).get('default')
-
-    form_defns = {sanitize_param(p['name']): p
-                  for p in parameters
-                  if p['in'] == 'formData'}
-
-    # openapi3 body
-    if body_name is None and body_schema is not None:
-        logger.debug('body schema is %s', body_schema)
-        body_properties = {sanitize_param(k): v
-                           for k, v
-                           in body_schema.get('properties', {}).items()}
-        default_body = body_schema.get('default', default_body)
-    else:
-        body_properties = {}
-
-    query_defns = {sanitize_param(p['name']): p
-                   for p in parameters if p['in'] == 'query'}  # type: dict[str, str]
-    path_defns = {p['name']: p
-                  for p in parameters
-                  if p['in'] == 'path'}
-
+    sanitize = pythonic if pythonic_params else sanitized
     arguments, has_kwargs = inspect_function_arguments(function)
-    default_query_params = {sanitize_param(p['name']): get_schema(p)['default']
-                            for p in parameters
-                            if p['in'] == 'query' and 'default' in get_schema(p)}
-    default_form_params = {sanitize_param(p['name']): get_schema(p)['default']
-                           for p in parameters
-                           if p['in'] == 'formData' and 'default' in get_schema(p)}
 
     @functools.wraps(function)
     def wrapper(request):
@@ -162,82 +88,34 @@ def parameter_to_arg(parameters, body_schema, consumes, function, pythonic_param
         logger.debug('Function Arguments: %s', arguments)
         kwargs = {}
 
+        logger.error(pythonic_params)
         if all_json(consumes):
             request_body = request.json
+            logger.error("json")
         elif consumes[0] in FORM_CONTENT_TYPES:
-            request_body = {sanitize_param(k): v for k, v in request.form.items()}
+            request_body = {sanitize(k): v for k, v in request.form.items()}
+            logger.error("form")
         else:
             request_body = request.body
+            logger.error("raw body")
 
-        if default_body and not request_body:
-            request_body = default_body
+        logger.error(request_body)
+        # accept formData even even if mimetype is wrong for backwards
+        # compatability  :/
+        request_body = request_body or {sanitize(k): v for k, v in request.form.items()}
 
-        # Parse path parameters
-        path_params = request.path_params
-        for key, value in path_params.items():
-            key = sanitize_param(key)
-            if key in path_defns:
-                kwargs[key] = get_val_from_param(value, path_defns[key])
-            else:  # Assume path params mechanism used for injection
-                kwargs[key] = value
+        try:
+            query = request.query.to_dict(flat=False)
+        except AttributeError:
+            query = dict(request.query.items())
 
-        if body_schema and body_name is None:
-            x_body_name = body_schema.get('x-body-name', 'body')
-            logger.debug('x-body-name is %s' % x_body_name)
-            if x_body_name in arguments or has_kwargs:
-                kwargs[x_body_name] = request_body
+        logger.error(consumes)
+        logger.error(request_body)
 
-        # swagger2 body param and formData
-        # Add body parameters
-        if body_name:
-            if not has_kwargs and body_name not in arguments:
-                logger.debug("Body parameter '%s' not in function arguments", body_name)
-            else:
-                logger.debug("Body parameter '%s' in function arguments", body_name)
-                kwargs[body_name] = request_body
-
-        if not body_properties:
-            # swagger 2
-            # Add formData parameters
-            form_arguments = copy.deepcopy(default_form_params)
-            form_arguments.update({sanitize_param(k): v for k, v in request.form.items()})
-            for key, value in form_arguments.items():
-                if not has_kwargs and key not in arguments:
-                    logger.debug("FormData parameter '%s' not in function arguments", key)
-                else:
-                    logger.debug("FormData parameter '%s' in function arguments", key)
-                    try:
-                        form_defn = form_defns[key]
-                    except KeyError:  # pragma: no cover
-                        logger.error("Function argument '{}' not defined in specification".format(key))
-                    else:
-                        kwargs[key] = get_val_from_param(value, form_defn)
-
-        # Add query parameters
-        query_arguments = copy.deepcopy(default_query_params)
-        query_arguments.update(make_request_query(request))
-        for key, value in query_arguments.items():
-            key = sanitize_param(key)
-            if not has_kwargs and key not in arguments:
-                logger.debug("Query Parameter '%s' not in function arguments", key)
-            else:
-                logger.debug("Query Parameter '%s' in function arguments", key)
-                try:
-                    query_defn = query_defns[key]
-                except KeyError:  # pragma: no cover
-                    logger.error("Function argument '{}' not defined in specification".format(key))
-                else:
-                    logger.debug('%s is a %s', key, query_defn)
-                    kwargs[key] = get_val_from_param(value, query_defn)
-
-        # Add file parameters
-        file_arguments = request.files
-        for key, value in file_arguments.items():
-            if not has_kwargs and key not in arguments:
-                logger.debug("File parameter (formData) '%s' not in function arguments", key)
-            else:
-                logger.debug("File parameter (formData) '%s' in function arguments", key)
-                kwargs[key] = value
+        kwargs.update(
+            operation.get_arguments(request.path_params, query, request_body,
+                                    request.files, arguments, has_kwargs, sanitize)
+        )
 
         # optionally convert parameter variable names to un-shadowed, snake_case form
         if pythonic_params:
