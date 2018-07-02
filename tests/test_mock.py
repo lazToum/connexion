@@ -1,5 +1,5 @@
 from connexion.mock import MockResolver, partial
-from connexion.operations import Swagger2Operation
+from connexion.operations import OpenAPIOperation, Swagger2Operation
 
 
 def test_partial():
@@ -11,6 +11,38 @@ def test_partial():
 
 
 def test_mock_resolver():
+    resolver = MockResolver(mock_all=True)
+
+    responses = {
+        'default': {
+            'content': {
+                'application/json': {
+                    'examples': {
+                        "super_cool_example": {
+                            'foo': 'bar'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    operation = OpenAPIOperation(api=None,
+                          method='GET',
+                          path='endpoint',
+                          path_parameters=[],
+                          operation={
+                              'responses': responses
+                          },
+                          app_security=[],
+                          resolver=resolver)
+    assert operation.operation_id == 'mock-1'
+
+    response, status_code = resolver.mock_operation(operation)
+    assert status_code == 200
+    assert response == {'foo': 'bar'}
+
+def test_mock_resolver_swagger():
     resolver = MockResolver(mock_all=True)
 
     responses = {
@@ -27,15 +59,12 @@ def test_mock_resolver():
                                   method='GET',
                                   path='endpoint',
                                   path_parameters=[],
+                                  app_produces=['application/json'],
+                                  app_consumes=['application/json'],
                                   operation={
                                       'responses': responses
                                   },
-                                  app_produces=['application/json'],
-                                  app_consumes=['application/json'],
                                   app_security=[],
-                                  security_definitions={},
-                                  definitions={},
-                                  parameter_definitions={},
                                   resolver=resolver)
     assert operation.operation_id == 'mock-1'
 
@@ -43,39 +72,41 @@ def test_mock_resolver():
     assert status_code == 200
     assert response == {'foo': 'bar'}
 
-def test_mock_resolver_example():
+
+def test_mock_resolver_inline_schema_example():
     resolver = MockResolver(mock_all=True)
 
     responses = {
         'default': {
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'foo': {
-                        'type': 'string'
+            'content': {
+                'application/json': {
+                    'schema': {
+                        'type': 'object',
+                        'properties': {
+                            'foo': {
+                                'schema': {
+                                    'type': 'string'
+                                }
+                            }
+                        }
+                    },
+                    'example': {
+                        'foo': 'bar'
                     }
-                },
-                'example': {
-                    'foo': 'bar'
                 }
             }
         }
     }
 
-    operation = Swagger2Operation(api=None,
-                                  method='GET',
-                                  path='endpoint',
-                                  path_parameters=[],
-                                  operation={
-                                      'responses': responses
-                                  },
-                                  app_produces=['application/json'],
-                                  app_consumes=['application/json'],
-                                  app_security=[],
-                                  security_definitions={},
-                                  definitions={},
-                                  parameter_definitions={},
-                                  resolver=resolver)
+    operation = OpenAPIOperation(api=None,
+                          method='GET',
+                          path='endpoint',
+                          path_parameters=[],
+                          operation={
+                              'responses': responses
+                          },
+                          app_security=[],
+                          resolver=resolver)
     assert operation.operation_id == 'mock-1'
 
     response, status_code = resolver.mock_operation(operation)
@@ -89,26 +120,20 @@ def test_mock_resolver_no_examples():
         '418': {}
     }
 
-    operation = Swagger2Operation(api=None,
-                                  method='GET',
-                                  path='endpoint',
-                                  path_parameters=[],
-                                  operation={
-                                      'responses': responses
-                                  },
-                                  app_produces=['application/json'],
-                                  app_consumes=['application/json'],
-                                  app_security=[],
-                                  security_definitions={},
-                                  definitions={},
-                                  parameter_definitions={},
-                                  resolver=resolver)
+    operation = OpenAPIOperation(api=None,
+                          method='GET',
+                          path='endpoint',
+                          path_parameters=[],
+                          operation={
+                              'responses': responses
+                          },
+                          app_security=[],
+                          resolver=resolver)
     assert operation.operation_id == 'mock-1'
 
     response, status_code = resolver.mock_operation(operation)
     assert status_code == 418
     assert response == 'No example response was defined.'
-
 
 def test_mock_resolver_notimplemented():
     resolver = MockResolver(mock_all=False)
@@ -118,38 +143,28 @@ def test_mock_resolver_notimplemented():
     }
 
     # do not mock the existent functions
-    operation = Swagger2Operation(api=None,
-                                  method='GET',
-                                  path='endpoint',
-                                  path_parameters=[],
-                                  operation={
-                                      'operationId': 'fakeapi.hello.get'
-                                  },
-                                  app_produces=['application/json'],
-                                  app_consumes=['application/json'],
-                                  app_security=[],
-                                  security_definitions={},
-                                  definitions={},
-                                  parameter_definitions={},
-                                  resolver=resolver)
+    operation = OpenAPIOperation(api=None,
+                          method='GET',
+                          path='endpoint',
+                          path_parameters=[],
+                          operation={
+                              'operationId': 'fakeapi.hello.get'
+                          },
+                          app_security=[],
+                          resolver=resolver)
     assert operation.operation_id == 'fakeapi.hello.get'
 
     # mock only the nonexistent ones
-    operation = Swagger2Operation(api=None,
-                                  method='GET',
-                                  path='endpoint',
-                                  path_parameters=[],
-                                  operation={
-                                      'operationId': 'fakeapi.hello.nonexistent_function',
-                                      'responses': responses
-                                  },
-                                  app_produces=['application/json'],
-                                  app_consumes=['application/json'],
-                                  app_security=[],
-                                  security_definitions={},
-                                  definitions={},
-                                  parameter_definitions={},
-                                  resolver=resolver)
+    operation = OpenAPIOperation(api=None,
+                          method='GET',
+                          path='endpoint',
+                          path_parameters=[],
+                          operation={
+                              'operationId': 'fakeapi.hello.nonexistent_function',
+                              'responses': responses
+                          },
+                          app_security=[],
+                          resolver=resolver)
 
     # check if it is using the mock function
     assert operation._resolution.function() == ('No example response was defined.', 418)

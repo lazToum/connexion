@@ -9,6 +9,7 @@ from jsonschema import Draft4Validator, ValidationError, draft4_format_checker
 from werkzeug import FileStorage
 
 from ..exceptions import ExtraParameterProblem
+from ..http_facts import FORM_CONTENT_TYPES
 from ..problem import problem
 from ..utils import all_json, boolean, is_json_mimetype, is_null, is_nullable
 
@@ -95,6 +96,10 @@ class RequestBodyValidator(object):
         self.api = api
         self.strict_validation = strict_validation
 
+    def validate_requestbody_property_list(self, data):
+        spec_params = self.schema.get('properties', {}).keys()
+        return validate_parameter_list(data, spec_params)
+
     def __call__(self, function):
         """
         :type function: types.FunctionType
@@ -105,7 +110,6 @@ class RequestBodyValidator(object):
         def wrapper(request):
             if all_json(self.consumes):
                 data = request.json
-
                 if data is None and len(request.body) > 0 and not self.is_null_value_valid:
                     try:
                         ctype_is_json = is_json_mimetype(request.headers.get("Content-Type", ""))
@@ -126,7 +130,22 @@ class RequestBodyValidator(object):
                                            content_type=request.headers.get("Content-Type", "")
                                        ))
 
-                logger.debug("%s validating schema...", request.url)
+                logger.debug('%s validating schema...', request.url)
+                error = self.validate_schema(data, request.url)
+                if error and not self.has_default:
+                    return error
+            elif self.consumes[0] in FORM_CONTENT_TYPES:
+                data = dict(request.form.items()) or (request.body if len(request.body) > 0 else {})
+                if data is None and len(request.body) > 0 and not self.is_null_value_valid:
+                    # complain about no data?
+                    pass
+                data.update(dict.fromkeys(request.files, ''))  # validator expects string..
+                logger.debug('%s validating schema...', request.url)
+                if self.strict_validation:
+                    formdata_errors = self.validate_requestbody_property_list(data)
+                    if formdata_errors:
+                        raise ExtraParameterProblem(formdata_errors, [])
+
                 error = self.validate_schema(data, request.url)
                 if error and not self.has_default:
                     return error

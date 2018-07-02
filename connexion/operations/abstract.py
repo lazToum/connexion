@@ -42,7 +42,6 @@ class AbstractOperation(SecureOperation):
             if important:
                 serious_business(stuff)
     """
-
     def __init__(self, api, method, path, operation, resolver,
                  app_security=None, security_schemes=None,
                  validate_responses=False, strict_validation=False,
@@ -198,6 +197,15 @@ class AbstractOperation(SecureOperation):
                 kwargs[key] = value
         return kwargs
 
+    def _get_body_argument(self, body, arguments, has_kwargs):
+        body_schema = self.body_schema
+        if body_schema:
+            x_body_name = body_schema.get('x-body-name', 'body')
+            logger.debug('x-body-name is %s' % x_body_name)
+            if x_body_name in arguments or has_kwargs:
+                return {x_body_name: body}
+        return {}
+
     @abc.abstractproperty
     def parameters(self):
         """
@@ -209,12 +217,14 @@ class AbstractOperation(SecureOperation):
         """
         Content-Types that the operation produces
         """
+        return []
 
     @abc.abstractproperty
     def consumes(self):
         """
         Content-Types that the operation consumes
         """
+        return []
 
     @abc.abstractproperty
     def body_schema(self):

@@ -8,19 +8,18 @@ from typing import AnyStr, List  # NOQA
 import jinja2
 import six
 import yaml
-from openapi_spec_validator import validate_v2_spec as validate_spec
+from six.moves.urllib.parse import urlparse
+
 from openapi_spec_validator.exceptions import OpenAPIValidationError
-from swagger_ui_bundle import swagger_ui_2_path
 
 from ..exceptions import InvalidSpecification, ResolverError
 from ..jsonref import resolve_refs
-from ..operations import Swagger2Operation
+from ..operations import OpenAPIOperation, Swagger2Operation
 from ..options import ConnexionOptions
 from ..resolver import Resolver
 from ..utils import Jsonifier
 
 MODULE_PATH = pathlib.Path(__file__).absolute().parent.parent
-SWAGGER_UI_PATH = swagger_ui_2_path
 SWAGGER_UI_URL = 'ui'
 
 logger = logging.getLogger('connexion.apis.abstract')
@@ -92,6 +91,15 @@ class AbstractAPI(object):
         self.specification = compatibility_layer(self.specification)
         logger.debug('Read specification', extra={'spec': self.specification})
 
+        self.spec_version = self._get_spec_version(self.specification)
+
+        self.options = ConnexionOptions(options, oas_version=self.spec_version)
+
+        logger.debug('Options Loaded',
+                     extra={'swagger_ui': self.options.openapi_console_ui_available,
+                            'swagger_path': self.options.openapi_console_ui_from_dir,
+                            'swagger_url': self.options.openapi_console_ui_path})
+
         # Avoid validator having ability to modify specification
         self.raw_spec = copy.deepcopy(self.specification)
         self._validate_spec(self.specification)
@@ -114,6 +122,7 @@ class AbstractAPI(object):
         logger.debug('Security Definitions: %s', self.security_definitions)
 
         self.definitions = self.specification.get('definitions', {})
+        self.components = self.specification.get('components', {})
         self.parameter_definitions = self.specification.get('parameters', {})
         self.response_definitions = self.specification.get('responses', {})
 
@@ -143,6 +152,10 @@ class AbstractAPI(object):
             self.add_auth_on_not_found(self.security, self.security_definitions)
 
     def _validate_spec(self, spec):
+        if self.spec_version < (3, 0, 0):
+            from openapi_spec_validator import validate_v2_spec as validate_spec
+        else:
+            from openapi_spec_validator import validate_v3_spec as validate_spec
         try:
             validate_spec(spec)
         except OpenAPIValidationError as e:
@@ -152,6 +165,13 @@ class AbstractAPI(object):
         # type: (AnyStr) -> None
         if base_path is None:
             self.base_path = canonical_base_path(self.specification.get('basePath', ''))
+            if self.spec_version >= (3, 0, 0):
+                # TODO variable subsitution in urls for oas3
+                servers = self.specification.get('servers', [])
+                for server in servers:
+                    # TODO how to handle multiple servers in an oas3 spec with different paths?
+                    self.base_path = canonical_base_path(urlparse(server['url']).path)
+                    break
         else:
             self.base_path = canonical_base_path(base_path)
             self.specification['basePath'] = base_path
@@ -192,25 +212,42 @@ class AbstractAPI(object):
         :type path: str
         :type swagger_operation: dict
         """
-        operation = Swagger2Operation(self,
-                                      method=method,
-                                      path=path,
-                                      path_parameters=path_parameters,
-                                      operation=swagger_operation,
-                                      app_produces=self.produces,
-                                      app_consumes=self.consumes,
-                                      app_security=self.security,
-                                      security_definitions=self.security_definitions,
-                                      definitions=self.definitions,
-                                      parameter_definitions=self.parameter_definitions,
-                                      response_definitions=self.response_definitions,
-                                      validate_responses=self.validate_responses,
-                                      validator_map=self.validator_map,
-                                      strict_validation=self.strict_validation,
-                                      resolver=self.resolver,
-                                      pythonic_params=self.pythonic_params,
-                                      uri_parser_class=self.options.uri_parser_class,
-                                      pass_context_arg_name=self.pass_context_arg_name)
+        if self.spec_version < (3, 0, 0):
+            operation = Swagger2Operation(self,
+                                          method=method,
+                                          path=path,
+                                          path_parameters=path_parameters,
+                                          operation=swagger_operation,
+                                          app_produces=self.produces,
+                                          app_consumes=self.consumes,
+                                          app_security=self.security,
+                                          security_definitions=self.security_definitions,
+                                          definitions=self.definitions,
+                                          parameter_definitions=self.parameter_definitions,
+                                          response_definitions=self.response_definitions,
+                                          validate_responses=self.validate_responses,
+                                          validator_map=self.validator_map,
+                                          strict_validation=self.strict_validation,
+                                          resolver=self.resolver,
+                                          pythonic_params=self.pythonic_params,
+                                          uri_parser_class=self.options.uri_parser_class,
+                                          pass_context_arg_name=self.pass_context_arg_name)
+        else:
+            operation = OpenAPIOperation(self,
+                                         method=method,
+                                         path=path,
+                                         operation=swagger_operation,
+                                         path_parameters=path_parameters,
+                                         app_security=self.security,
+                                         components=self.components,
+                                         validate_responses=self.validate_responses,
+                                         validator_map=self.validator_map,
+                                         strict_validation=self.strict_validation,
+                                         resolver=self.resolver,
+                                         pythonic_params=self.pythonic_params,
+                                         uri_parser_class=self.options.uri_parser_class,
+                                         pass_context_arg_name=self.pass_context_arg_name)
+
         self._add_operation_internal(method, path, operation)
 
     @abc.abstractmethod
@@ -282,6 +319,20 @@ class AbstractAPI(object):
 
             swagger_string = jinja2.Template(swagger_template).render(**arguments)
             return yaml.safe_load(swagger_string)  # type: dict
+
+    def _get_spec_version(self, spec):
+        try:
+            version_string = spec.get('openapi') or spec.get('swagger')
+        except AttributeError:
+            raise InvalidSpecification('Unable to get spec version')
+        if version_string is None:
+            raise InvalidSpecification('Unable to get spec version')
+        try:
+            version_tuple = tuple(map(int, version_string.split(".")))
+        except TypeError:
+            # unable to convert to semver tuple
+            raise InvalidSpecification('Invalid Spec Version')
+        return version_tuple
 
     @classmethod
     @abc.abstractmethod

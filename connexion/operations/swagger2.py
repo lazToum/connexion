@@ -34,6 +34,19 @@ class Swagger2Operation(AbstractOperation):
         :param method: HTTP method
         :type method: str
         :param path: relative path to this operation
+
+        This class uses the OperationID identify the module and function that will handle the operation
+
+        From Swagger Specification:
+
+        **OperationID**
+
+        A friendly name for the operation. The id MUST be unique among all operations described in the API.
+        Tools and libraries MAY use the operation id to uniquely identify an operation.
+
+        :param method: HTTP method
+        :type method: str
+        :param path:
         :type path: str
         :param operation: swagger operation object
         :type operation: dict

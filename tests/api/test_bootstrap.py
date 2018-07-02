@@ -8,7 +8,7 @@ from conftest import TEST_FOLDER, build_app_from_fixture
 from connexion import App
 from connexion.exceptions import InvalidSpecification
 
-SPECS = ["swagger.yaml"]
+SPECS = ["swagger.yaml", "openapi.yaml"]
 
 
 @pytest.mark.parametrize("spec", SPECS)
@@ -149,11 +149,11 @@ def test_no_swagger_json_api(simple_api_spec_dir, spec):
     assert swagger_json.status_code == 404
 
 
-@pytest.mark.parametrize("spec", SPECS)
-def test_swagger_json_content_type(simple_app, spec):
+def test_swagger_json_content_type(simple_app):
     app_client = simple_app.app.test_client()
+    spec = simple_app._spec_file
     url = '/v1.0/{spec}'.format(spec=spec.replace("yaml", "json"))
-    response = app_client.get(url, data={})  # type: flask.Response
+    response = app_client.get(url)  # type: flask.Response
     assert response.status_code == 200
     assert response.content_type == 'application/json'
 
