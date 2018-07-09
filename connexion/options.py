@@ -74,13 +74,13 @@ class ConnexionOptions(object):
         return self._options.get('swagger_path', INTERNAL_CONSOLE_UI_PATH)
 
     @property
-    def uri_parser_class(self):
+    def operation_class(self):
         # type: () -> str
         """
-        The class to use for parsing URIs into path and query parameters.
+        The class to use for handling openapi operations
         Default: None
         """
-        return self._options.get('uri_parser_class', None)
+        return self._options.get('operation_class', None)
 
 
 def filter_values(dictionary):

@@ -276,23 +276,14 @@ If you use the `array` type In the Swagger definition, you can define the
 `collectionFormat` so that it won't be recognized. Connexion currently
 supports collection formats "pipes" and "csv". The default format is "csv".
 
+More on Array Types
+^^^^^^^^^^^^^^^^^^^
+
 Connexion is opinionated about how the URI is parsed for ``array`` types.
 The default behavior for query parameters that have been defined multiple
 times is to join them all together. For example, if you provide a URI with
 the the query string ``?letters=a,b,c&letters=d,e,f``, connexion will set
 ``letters = ['a', 'b', 'c', 'd', 'e', 'f']``.
-
-You can override this behavior by specifying the URI parser in the app or
-api options.
-
-.. code-block:: python
-
-   from connexion.decorators.uri_parsing import Swagger2URIParser
-   options = {'uri_parsing_class': Swagger2URIParser}
-   app = connexion.App(__name__, specification_dir='swagger/', options=options)
-
-You can implement your own URI parsing behavior by inheriting from
-``connextion.decorators.uri_parsing.AbstractURIParser``.
 
 There are three URI parsers included with connection.
 1. AlwaysMultiURIParser (default)
@@ -311,6 +302,23 @@ There are three URI parsers included with connection.
    first defined value. For example, if you provided a URI with the query
    string ``?letters=a,b,c&letters=d,e,f`` and ``collectionFormat: csv``
    then connexion will set ``letters = ['a', 'b', 'c']``
+
+You can override the _uri_parsing_decorator property on the Operation class
+to change this behavior. See the next section on how to override methods
+of the Operation class.
+
+Overriding the Operation Class
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+If you want to implement custom behavior for the Operation class, you can
+inherit from connexion.operation.Operation and override methods.
+
+You can then instruct the app to use your operation class by specifying
+it in the app or api options.
+
+.. code-block:: python
+
+   options = {'OperationClass': MyCustomOperation}
+   app = connexion.App(__name__, specification_dir='swagger/', options=options)
 
 Parameter validation
 ^^^^^^^^^^^^^^^^^^^^

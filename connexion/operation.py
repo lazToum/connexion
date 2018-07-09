@@ -212,7 +212,6 @@ class Operation(SecureOperation):
         self.operation = operation
         self.randomize_endpoint = randomize_endpoint
         self.pythonic_params = pythonic_params
-        self.uri_parser_class = uri_parser_class or AlwaysMultiURIParser
 
         # todo support definition references
         # todo support references to application level parameters
@@ -393,7 +392,7 @@ class Operation(SecureOperation):
         for validation_decorator in self.__validation_decorators:
             function = validation_decorator(function)
 
-        uri_parsing_decorator = self.__uri_parsing_decorator
+        uri_parsing_decorator = self._uri_parsing_decorator
         logging.debug('... Adding uri parsing decorator (%r)', uri_parsing_decorator)
         function = uri_parsing_decorator(function)
 
@@ -411,14 +410,14 @@ class Operation(SecureOperation):
         return function
 
     @property
-    def __uri_parsing_decorator(self):
+    def _uri_parsing_decorator(self):
         """
         Get uri parsing decorator
 
         This decorator handles query and path parameter deduplication and
         array types.
         """
-        return self.uri_parser_class(self.parameters)
+        return AlwaysMultiURIParser(self.parameters)
 
     @property
     def __content_type_decorator(self):

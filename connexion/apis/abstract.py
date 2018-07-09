@@ -184,24 +184,26 @@ class AbstractAPI(object):
         :type path: str
         :type swagger_operation: dict
         """
-        operation = Operation(self,
-                              method=method,
-                              path=path,
-                              path_parameters=path_parameters,
-                              operation=swagger_operation,
-                              app_produces=self.produces,
-                              app_consumes=self.consumes,
-                              app_security=self.security,
-                              security_definitions=self.security_definitions,
-                              definitions=self.definitions,
-                              parameter_definitions=self.parameter_definitions,
-                              response_definitions=self.response_definitions,
-                              validate_responses=self.validate_responses,
-                              validator_map=self.validator_map,
-                              strict_validation=self.strict_validation,
-                              resolver=self.resolver,
-                              pythonic_params=self.pythonic_params,
-                              uri_parser_class=self.options.uri_parser_class)
+        operation_class = self.options.operation_class or Operation
+        operation = operation_class(
+            self,
+            method=method,
+            path=path,
+            path_parameters=path_parameters,
+            operation=swagger_operation,
+            app_produces=self.produces,
+            app_consumes=self.consumes,
+            app_security=self.security,
+            security_definitions=self.security_definitions,
+            definitions=self.definitions,
+            parameter_definitions=self.parameter_definitions,
+            response_definitions=self.response_definitions,
+            validate_responses=self.validate_responses,
+            validator_map=self.validator_map,
+            strict_validation=self.strict_validation,
+            resolver=self.resolver,
+            pythonic_params=self.pythonic_params
+        )
         self._add_operation_internal(method, path, operation)
 
     @abc.abstractmethod
