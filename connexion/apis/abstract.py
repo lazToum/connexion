@@ -6,6 +6,7 @@ import sys
 from typing import AnyStr, List  # NOQA
 
 import jinja2
+import jsonref
 import six
 import yaml
 from swagger_spec_validator.validator20 import validate_spec
@@ -88,6 +89,7 @@ class AbstractAPI(object):
         # Avoid validator having ability to modify specification
         spec = copy.deepcopy(self.specification)
         self._validate_spec(spec)
+        spec = jsonref.JsonRef.replace_refs(spec)
 
         # https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md#fixed-fields
         # If base_path is not on provided then we try to read it from the swagger.yaml or use / by default

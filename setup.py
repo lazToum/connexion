@@ -25,6 +25,7 @@ install_requires = [
     'jsonschema>=2.5.1',
     'PyYAML>=3.11',
     'requests>=2.9.1',
+    'jsonref>=0.1',
     'six>=1.9',
     'swagger-spec-validator>=2.3.1',
     'inflection>=0.3.1',

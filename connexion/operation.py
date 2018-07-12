@@ -241,27 +241,9 @@ class Operation(SecureOperation):
                                                                            param_type=param['type']))
 
     def resolve_reference(self, schema):
-        schema = deepcopy(schema)  # avoid changing the original schema
-        self.check_references(schema)
-
-        # find the object we need to resolve/update if this is not a proper SchemaObject
-        # e.g a response or parameter object
-        for obj in schema, schema.get('items'):
-            reference = obj and obj.get('$ref')  # type: str
-            if reference:
-                break
-        if reference:
-            definition = deepcopy(self._retrieve_reference(reference))
-            # Update schema
-            obj.update(definition)
-            del obj['$ref']
-
-        # if there is a schema object on this param or response, then we just
-        # need to include the defs and it can be validated by jsonschema
         if 'schema' in schema:
             schema['schema']['definitions'] = self.definitions
             return schema
-
         return schema
 
     def check_references(self, schema):
