@@ -1,8 +1,10 @@
+import collections
 import functools
 import logging
 from copy import deepcopy
 
-from jsonschema import ValidationError
+from jsonschema import RefResolver, ValidationError
+from jsonschema.exceptions import RefResolutionError
 
 from .decorators import validation
 from .decorators.decorator import (BeginOfRequestLifecycleDecorator,
@@ -18,7 +20,7 @@ from .decorators.uri_parsing import AlwaysMultiURIParser
 from .decorators.validation import (ParameterValidator, RequestBodyValidator,
                                     TypeValidationError)
 from .exceptions import InvalidSpecification
-from .utils import all_json, is_nullable
+from .utils import all_json, deep_get, is_nullable
 
 logger = logging.getLogger('connexion.operation')
 
@@ -30,6 +32,42 @@ VALIDATOR_MAP = {
     'body': RequestBodyValidator,
     'response': ResponseValidator,
 }
+
+
+def _resolve_refs(spec, defns):
+    """
+    Resolve JSON references.
+    """
+    spec = deepcopy(spec)
+    defns = deepcopy(defns)
+    resolver = RefResolver('', spec)
+
+    def _do_resolve(node):
+        if isinstance(node, collections.Mapping) and '$ref' in node:
+            path = node['$ref'][2:].split("/")
+            try:
+                # resolve known references
+                node.update(deep_get(defns, path))
+                del node['$ref']
+                return node
+            except KeyError:
+                try:
+                    # resolve external references
+                    with resolver.resolving(node['$ref']) as resolved:
+                        return resolved
+                except RefResolutionError as e:
+                    # reraise as connexion error
+                    raise InvalidSpecification(repr(e))
+        elif isinstance(node, collections.Mapping):
+            for k, v in node.items():
+                node[k] = _do_resolve(v)
+        elif isinstance(node, (list, tuple)):
+            for i in range(len(node)):
+                node[i] = _do_resolve(node[i])
+        return node
+
+    res = _do_resolve(spec)
+    return res
 
 
 class SecureOperation(object):
@@ -202,14 +240,13 @@ class Operation(SecureOperation):
         self.definitions = definitions or {}
         self.parameter_definitions = parameter_definitions or {}
         self.response_definitions = response_definitions or {}
-        self.definitions_map = {
+        self.operation = _resolve_refs(operation, {
             'definitions': self.definitions,
             'parameters': self.parameter_definitions,
-            'responses': self.response_definitions
-        }
+            'responses': self.response_definitions,
+        })
         self.validate_responses = validate_responses
         self.strict_validation = strict_validation
-        self.operation = operation
         self.randomize_endpoint = randomize_endpoint
         self.pythonic_params = pythonic_params
         self.uri_parser_class = uri_parser_class or AlwaysMultiURIParser
@@ -241,83 +278,16 @@ class Operation(SecureOperation):
                                                                            param_type=param['type']))
 
     def resolve_reference(self, schema):
-        schema = deepcopy(schema)  # avoid changing the original schema
-        self.check_references(schema)
+        schema = _resolve_refs(schema, {
+            'definitions': self.definitions,
+            'parameters': self.parameter_definitions,
+            'responses': self.response_definitions,
+        })
 
-        # find the object we need to resolve/update if this is not a proper SchemaObject
-        # e.g a response or parameter object
-        for obj in schema, schema.get('items'):
-            reference = obj and obj.get('$ref')  # type: str
-            if reference:
-                break
-        if reference:
-            definition = deepcopy(self._retrieve_reference(reference))
-            # Update schema
-            obj.update(definition)
-            del obj['$ref']
-
-        # if there is a schema object on this param or response, then we just
-        # need to include the defs and it can be validated by jsonschema
         if 'schema' in schema:
             schema['schema']['definitions'] = self.definitions
             return schema
-
         return schema
-
-    def check_references(self, schema):
-        """
-        Searches the keys and values of a schema object for json references.
-        If it finds one, it attempts to locate it and will thrown an exception
-        if the reference can't be found in the definitions dictionary.
-
-        :param schema: The schema object to check
-        :type schema: dict
-        :raises InvalidSpecification: raised when a reference isn't found
-        """
-
-        stack = [schema]
-        visited = set()
-        while stack:
-            schema = stack.pop()
-            for k, v in schema.items():
-                if k == "$ref":
-                    if v in visited:
-                        continue
-                    visited.add(v)
-                    stack.append(self._retrieve_reference(v))
-                elif isinstance(v, (list, tuple)):
-                    continue
-                elif hasattr(v, "items"):
-                    stack.append(v)
-
-    def _retrieve_reference(self, reference):
-        if not reference.startswith('#/'):
-            raise InvalidSpecification(
-                "{method} {path} '$ref' needs to start with '#/'".format(**vars(self)))
-        path = reference.split('/')
-        definition_type = path[1]
-        try:
-            definitions = self.definitions_map[definition_type]
-        except KeyError:
-            ref_possible = ', '.join(self.definitions_map.keys())
-            raise InvalidSpecification(
-                "{method} {path} $ref \"{reference}\" needs to point to one of: "
-                "{ref_possible}".format(
-                    method=self.method,
-                    path=self.path,
-                    reference=reference,
-                    ref_possible=ref_possible
-                ))
-        definition_name = path[-1]
-        try:
-            # Get sub definition
-            definition = deepcopy(definitions[definition_name])
-        except KeyError:
-            raise InvalidSpecification(
-                "{method} {path} Definition '{definition_name}' not found".format(
-                    definition_name=definition_name, method=self.method, path=self.path))
-
-        return definition
 
     def get_mimetype(self):
         """

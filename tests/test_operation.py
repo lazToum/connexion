@@ -29,7 +29,8 @@ DEFINITIONS = {'new_stack': {'required': ['image_version', 'keep_stacks', 'new_t
                                                             'Percentage of the traffic'}}},
                'composed': {'required': ['test'],
                             'type': 'object',
-                            'properties': {'test': {'schema': {'$ref': '#/definitions/new_stack'}}}}}
+                            'properties': {'test': {'schema': {'$ref': '#/definitions/new_stack'}}}},
+               'problem': {"not": "defined"}}
 PARAMETER_DEFINITIONS = {'myparam': {'in': 'path', 'type': 'integer'}}
 
 OPERATION1 = {'description': 'Adds a new stack to be created by lizzy and returns the '
@@ -43,7 +44,7 @@ OPERATION1 = {'description': 'Adds a new stack to be created by lizzy and return
                                   'CloudFormation Stack creation can '
                                   "still fail if it's rejected by senza "
                                   'or AWS CF.',
-                                  'schema': {'$ref': '#/definitions/stack'}},
+                                  'schema': {'$ref': '#/definitions/new_stack'}},
                             400: {'description': 'Stack was not created because request '
                                   'was invalid',
                                   'schema': {'$ref': '#/definitions/problem'}},
@@ -69,7 +70,7 @@ OPERATION2 = {'description': 'Adds a new stack to be created by lizzy and return
                                   'CloudFormation Stack creation can '
                                   "still fail if it's rejected by senza "
                                   'or AWS CF.',
-                                  'schema': {'$ref': '#/definitions/stack'}},
+                                  'schema': {'$ref': '#/definitions/new_stack'}},
                             400: {'description': 'Stack was not created because request '
                                   'was invalid',
                                   'schema': {'$ref': '#/definitions/problem'}},
@@ -91,7 +92,7 @@ OPERATION3 = {'description': 'Adds a new stack to be created by lizzy and return
                                   'CloudFormation Stack creation can '
                                   "still fail if it's rejected by senza "
                                   'or AWS CF.',
-                                  'schema': {'$ref': '#/definitions/stack'}},
+                                  'schema': {'$ref': '#/definitions/new_stack'}},
                             400: {'description': 'Stack was not created because request '
                                   'was invalid',
                                   'schema': {'$ref': '#/definitions/problem'}},
@@ -129,7 +130,7 @@ OPERATION6 = {'description': 'Adds a new stack to be created by lizzy and return
                                   'CloudFormation Stack creation can '
                                   "still fail if it's rejected by senza "
                                   'or AWS CF.',
-                                  'schema': {'$ref': '#/definitions/stack'}},
+                                  'schema': {'$ref': '#/definitions/new_stack'}},
                             400: {'description': 'Stack was not created because request '
                                   'was invalid',
                                   'schema': {'$ref': '#/definitions/problem'}},
@@ -156,7 +157,7 @@ OPERATION7 = {
                           'CloudFormation Stack creation can '
                           "still fail if it's rejected by senza "
                           'or AWS CF.',
-                          'schema': {'$ref': '#/definitions/stack'}},
+                          'schema': {'$ref': '#/definitions/new_stack'}},
                   '400': {'description': 'Stack was not created because request '
                           'was invalid',
                           'schema': {'$ref': '#/definitions/problem'}},
@@ -196,7 +197,7 @@ OPERATION9 = {'description': 'Adds a new stack to be created by lizzy and return
                                     'CloudFormation Stack creation can '
                                     "still fail if it's rejected by senza "
                                     'or AWS CF.',
-                                    'schema': {'$ref': '#/definitions/stack'}},
+                                    'schema': {'$ref': '#/definitions/new_stack'}},
                             '400': {'description': 'Stack was not created because request '
                                     'was invalid',
                                     'schema': {'$ref': '#/definitions/problem'}},
@@ -218,7 +219,7 @@ OPERATION10 = {'description': 'Adds a new stack to be created by lizzy and retur
                                      'CloudFormation Stack creation can '
                                      "still fail if it's rejected by senza "
                                      'or AWS CF.',
-                                     'schema': {'$ref': '#/definitions/stack'}},
+                                     'schema': {'$ref': '#/definitions/new_stack'}},
                              '400': {'description': 'Stack was not created because request '
                                      'was invalid',
                                      'schema': {'$ref': '#/definitions/problem'}},
@@ -279,10 +280,8 @@ def test_operation(api):
     assert operation.consumes == ['application/json']
     assert operation.security == [{'oauth': ['uid']}]
 
-    expected_body_schema = {
-        '$ref': '#/definitions/new_stack',
-        'definitions': DEFINITIONS
-    }
+    expected_body_schema = {'definitions': DEFINITIONS}
+    expected_body_schema.update(DEFINITIONS["new_stack"])
     assert operation.body_schema == expected_body_schema
 
 
@@ -312,7 +311,7 @@ def test_operation_array(api):
     assert operation.security == [{'oauth': ['uid']}]
     expected_body_schema = {
         'type': 'array',
-        'items': {'$ref': '#/definitions/new_stack'},
+        'items': DEFINITIONS["new_stack"],
         'definitions': DEFINITIONS
     }
     assert operation.body_schema == expected_body_schema
@@ -342,10 +341,8 @@ def test_operation_composed_definition(api):
     assert operation.produces == ['application/json']
     assert operation.consumes == ['application/json']
     assert operation.security == [{'oauth': ['uid']}]
-    expected_body_schema = {
-        '$ref': '#/definitions/composed',
-        'definitions': DEFINITIONS
-    }
+    expected_body_schema = {'definitions': DEFINITIONS}
+    expected_body_schema.update(DEFINITIONS["composed"])
     assert operation.body_schema == expected_body_schema
 
 
@@ -374,10 +371,8 @@ def test_operation_local_security_oauth2(api):
     assert operation.produces == ['application/json']
     assert operation.consumes == ['application/json']
     assert operation.security == [{'oauth': ['uid']}]
-    expected_body_schema = {
-        '$ref': '#/definitions/composed',
-        'definitions': DEFINITIONS
-    }
+    expected_body_schema = {'definitions': DEFINITIONS}
+    expected_body_schema.update(DEFINITIONS["composed"])
     assert operation.body_schema == expected_body_schema
 
 
@@ -406,10 +401,8 @@ def test_operation_local_security_duplicate_token_info(api):
     assert operation.produces == ['application/json']
     assert operation.consumes == ['application/json']
     assert operation.security == [{'oauth': ['uid']}]
-    expected_body_schema = {
-        '$ref': '#/definitions/composed',
-        'definitions': DEFINITIONS
-    }
+    expected_body_schema = {'definitions': DEFINITIONS}
+    expected_body_schema.update(DEFINITIONS["composed"])
     assert operation.body_schema == expected_body_schema
 
 def test_non_existent_reference(api):
@@ -429,8 +422,7 @@ def test_non_existent_reference(api):
         operation.body_schema
 
     exception = exc_info.value
-    assert str(exception) == "<InvalidSpecification: GET endpoint Definition 'new_stack' not found>"
-    assert repr(exception) == "<InvalidSpecification: GET endpoint Definition 'new_stack' not found>"
+    assert "definitions/new_stack" in str(exception)
 
 
 def test_multi_body(api):
@@ -471,8 +463,7 @@ def test_invalid_reference(api):
         operation.body_schema
 
     exception = exc_info.value
-    assert str(exception).startswith("<InvalidSpecification: GET endpoint $ref")
-    assert repr(exception).startswith("<InvalidSpecification: GET endpoint $ref")
+    assert "notdefinitions/new_stack" in str(exception)
 
 
 def test_no_token_info(api):
@@ -496,10 +487,8 @@ def test_no_token_info(api):
     assert operation.consumes == ['application/json']
     assert operation.security == [{'oauth': ['uid']}]
 
-    expected_body_schema = {
-        '$ref': '#/definitions/new_stack',
-        'definitions': DEFINITIONS
-    }
+    expected_body_schema = {'definitions': DEFINITIONS}
+    expected_body_schema.update(DEFINITIONS["new_stack"])
     assert operation.body_schema == expected_body_schema
 
 
@@ -527,34 +516,49 @@ def test_resolve_invalid_reference(api):
                   security_definitions={}, definitions={},
                   parameter_definitions=PARAMETER_DEFINITIONS, resolver=Resolver())
 
-    exception = exc_info.value  # type: InvalidSpecification
-    assert exception.reason == "GET endpoint '$ref' needs to start with '#/'"
+    exception = exc_info.value
+    assert "parameters/fail" in str(exception)
 
 
 def test_default(api):
     op = OPERATION6.copy()
     op['parameters'][1]['default'] = 1
-    Operation(api=api, method='GET', path='endpoint', path_parameters=[], operation=op,
-              app_produces=['application/json'], app_consumes=['application/json'],
-              app_security=[], security_definitions={}, definitions=DEFINITIONS,
-              parameter_definitions=PARAMETER_DEFINITIONS,
-              resolver=Resolver())
+    Operation(
+        api=api, method='GET', path='endpoint', path_parameters=[],
+        operation=op, app_produces=['application/json'],
+        app_consumes=['application/json'], app_security=[],
+        security_definitions={}, definitions=DEFINITIONS,
+        parameter_definitions=PARAMETER_DEFINITIONS, resolver=Resolver()
+    )
     op = OPERATION8.copy()
     op['parameters'][0]['default'] = {
-        'keep_stacks': 1, 'image_version': 'one', 'senza_yaml': 'senza.yaml', 'new_traffic': 100
+        'keep_stacks': 1,
+        'image_version': 'one',
+        'senza_yaml': 'senza.yaml',
+        'new_traffic': 100
     }
-    Operation(api=api, method='POST', path='endpoint', path_parameters=[], operation=op,
-              app_produces=['application/json'], app_consumes=['application/json'], app_security=[],
-              security_definitions={}, definitions=DEFINITIONS, parameter_definitions={}, resolver=Resolver())
+    Operation(
+        api=api, method='POST', path='endpoint', path_parameters=[],
+        operation=op, app_produces=['application/json'],
+        app_consumes=['application/json'], app_security=[],
+        security_definitions={}, definitions=DEFINITIONS,
+        parameter_definitions={}, resolver=Resolver()
+    )
 
 
 def test_get_path_parameter_types(api):
     op = OPERATION1.copy()
-    op['parameters'] = [{'in': 'path', 'type': 'int', 'name': 'int_path'},
-                        {'in': 'path', 'type': 'string', 'name': 'string_path'},
-                        {'in': 'path', 'type': 'string', 'format': 'path', 'name': 'path_path'}]
+    op['parameters'] = [
+        {'in': 'path', 'type': 'int', 'name': 'int_path'},
+        {'in': 'path', 'type': 'string', 'name': 'string_path'},
+        {'in': 'path', 'type': 'string', 'format': 'path', 'name': 'path_path'}
+    ]
 
-    operation = Operation(api=api, method='GET', path='endpoint', path_parameters=[], operation=op,
-                          app_produces=['application/json'], app_consumes=['application/json'], resolver=Resolver())
+    operation = Operation(
+        api=api, method='GET', path='endpoint', path_parameters=[],
+        operation=op, app_produces=['application/json'],
+        app_consumes=['application/json'],
+        definitions=DEFINITIONS, resolver=Resolver()
+    )
 
     assert {'int_path': 'int', 'string_path': 'string', 'path_path': 'path'} == operation.get_path_parameter_types()
