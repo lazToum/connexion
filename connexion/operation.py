@@ -253,9 +253,12 @@ class Operation(SecureOperation):
 
         # todo support definition references
         # todo support references to application level parameters
-        self.parameters = list(self.resolve_parameters(operation.get('parameters', [])))
+        self.parameters = list(self.operation.get('parameters', []))
         if path_parameters:
-            self.parameters += list(self.resolve_parameters(path_parameters))
+            path_parameters = _resolve_refs(path_parameters, {
+                'parameters': self.parameter_definitions
+            })
+            self.parameters += list(path_parameters)
 
         self.security = operation.get('security', app_security)
         self.produces = operation.get('produces', app_produces)
@@ -277,13 +280,7 @@ class Operation(SecureOperation):
                                            ' type \'{param_type}\''.format(param_name=param['name'],
                                                                            param_type=param['type']))
 
-    def resolve_reference(self, schema):
-        schema = _resolve_refs(schema, {
-            'definitions': self.definitions,
-            'parameters': self.parameter_definitions,
-            'responses': self.response_definitions,
-        })
-
+    def with_definitions(self, schema):
         if 'schema' in schema:
             schema['schema']['definitions'] = self.definitions
             return schema
@@ -306,11 +303,6 @@ class Operation(SecureOperation):
         else:
             return DEFAULT_MIMETYPE
 
-    def resolve_parameters(self, parameters):
-        for param in parameters:
-            param = self.resolve_reference(param)
-            yield param
-
     def get_path_parameter_types(self):
         return {p['name']: 'path' if p.get('type') == 'string' and p.get('format') == 'path' else p.get('type')
                 for p in self.parameters if p['in'] == 'path'}
@@ -320,7 +312,7 @@ class Operation(SecureOperation):
         """
         The body schema definition for this operation.
         """
-        return self.body_definition.get('schema')
+        return self.with_definitions(self.body_definition).get('schema')
 
     @property
     def body_definition(self):
