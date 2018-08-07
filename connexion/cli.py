@@ -183,7 +183,6 @@ def run(spec_file,
     )
 
     options = {
-        "auth_all_paths": auth_all_paths,
         "swagger_json": not hide_spec,
         "swagger_path": console_ui_from or None,
         "swagger_ui": not hide_console_ui,
@@ -192,6 +191,7 @@ def run(spec_file,
 
     app = app_cls(__name__,
                   debug=debug,
+                  auth_all_paths=auth_all_paths,
                   options=options)
 
     app.add_api(spec_file_full_path,
