@@ -38,7 +38,6 @@ def post_greeting(name, **kwargs):
     return data
 
 def post_greeting3(body, **kwargs):
-    print(body)
     data = {'greeting': 'Hello {name}'.format(name=body["name"])}
     return data
 
