@@ -69,13 +69,6 @@ class AbstractAPI(object):
         self.validator_map = validator_map
         self.resolver_error_handler = resolver_error_handler
 
-        self.options = ConnexionOptions(options)
-
-        logger.debug('Options Loaded',
-                     extra={'swagger_ui': self.options.openapi_console_ui_available,
-                            'swagger_path': self.options.openapi_console_ui_from_dir,
-                            'swagger_url': self.options.openapi_console_ui_path})
-
         logger.debug('Loading specification: %s', specification,
                      extra={'swagger_yaml': specification,
                             'base_path': base_path,
