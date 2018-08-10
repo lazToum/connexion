@@ -217,14 +217,12 @@ class AbstractOperation(SecureOperation):
         """
         Content-Types that the operation produces
         """
-        return []
 
     @abc.abstractproperty
     def consumes(self):
         """
         Content-Types that the operation consumes
         """
-        return []
 
     @abc.abstractproperty
     def body_schema(self):
