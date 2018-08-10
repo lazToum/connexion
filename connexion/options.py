@@ -8,11 +8,6 @@ try:
 except ImportError:
     swagger_ui_2_path = swagger_ui_3_path = None
 
-try:
-    from swagger_ui_bundle import swagger_ui_2_path
-except ImportError:
-    swagger_ui_2_path = None
-
 MODULE_PATH = pathlib.Path(__file__).absolute().parent
 NO_UI_MSG = """The swagger_ui directory could not be found.
     Please install connexion with extra install: pip install connexion[swagger-ui]
