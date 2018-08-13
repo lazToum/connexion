@@ -8,9 +8,8 @@ from typing import AnyStr, List  # NOQA
 import jinja2
 import six
 import yaml
-from six.moves.urllib.parse import urlparse
-
 from openapi_spec_validator.exceptions import OpenAPIValidationError
+from six.moves.urllib.parse import urlparse
 
 from ..exceptions import InvalidSpecification, ResolverError
 from ..jsonref import resolve_refs
